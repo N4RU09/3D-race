@@ -758,6 +758,7 @@ export function RacingGame({
 
     const tick = () => {
       const st = statsRef.current;
+      const prevIdx = st.lastNearestIndex;
       let dt = clock.getDelta();
       if (dt > 0.1) dt = 0.1; // Cap extreme delays to keep frame consistent
 
@@ -965,7 +966,6 @@ export function RacingGame({
       // 3. TRACK LAP COMPLETE CHECKPOINT PROGRESSIONS
       // We check if the player crossed the start-finish corridor indices (around 0 and 1000)
       const buffer = 35;
-      const prevIdx = st.lastNearestIndex;
       
       // If we jump from near 1000 to near 0, completed lap
       if (prevIdx < buffer && st.lastNearestIndex < buffer) {
@@ -1087,10 +1087,14 @@ export function RacingGame({
     let tickCount = 3;
     const countTimer = setInterval(() => {
       tickCount -= 1;
-      setCountdown(tickCount >= 0 ? tickCount : null);
-      if (tickCount <= 0) {
+      if (tickCount === 0) {
         statsRef.current.countdownActive = false;
+        setCountdown(0);
+      } else if (tickCount < 0) {
+        setCountdown(null);
         clearInterval(countTimer);
+      } else {
+        setCountdown(tickCount);
       }
     }, 1000);
 

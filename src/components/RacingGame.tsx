@@ -14,6 +14,7 @@ interface RacingGameProps {
   carColor: string;
   trackId: string;
   isMultiplayer: boolean;
+  roomCode?: string;
   onExit: () => void;
 }
 
@@ -23,6 +24,7 @@ export function RacingGame({
   carColor,
   trackId,
   isMultiplayer,
+  roomCode,
   onExit,
 }: RacingGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -715,6 +717,7 @@ export function RacingGame({
           speed: st.speed,
           wheelsAngle: st.wheelsAngle,
           isDrifting: st.isDrifting,
+          roomCode: roomCode || "",
         });
 
         // Track and update peer ghost rendering states
@@ -850,26 +853,15 @@ export function RacingGame({
       // Charge booster during drift when racing and countdown is complete (charges ~22% per second, total 4.5s)
       if (st.isDrifting && !st.countdownActive && !st.raceDone) {
         st.boosterCharge = Math.min(100, st.boosterCharge + 22.0 * dt);
-        if (st.boosterCharge >= 100) {
-          st.boosterUnlocked = true;
-        }
       }
 
       // Handle dynamic booster activation
-      if (st.boosterUnlocked && st.controls.boost && st.boosterCharge > 0 && !st.countdownActive && !st.raceDone) {
+      if (st.controls.boost && st.boosterCharge > 0 && !st.countdownActive && !st.raceDone) {
         st.isBoosting = true;
         // Drain booster charge over time (~38% depletion per second, approx 2.6s max duration)
         st.boosterCharge = Math.max(0, st.boosterCharge - 38.0 * dt);
-        if (st.boosterCharge <= 0) {
-          st.isBoosting = false;
-          st.boosterUnlocked = false;
-        }
       } else {
         st.isBoosting = false;
-        // If booster runs empty, unlock standard charging cycle
-        if (st.boosterCharge <= 0) {
-          st.boosterUnlocked = false;
-        }
       }
 
       let targetMaxSpeed = isOffRoad ? 7.5 : 36.5; // (in units per sec, approx 25 vs 130 km/h)

@@ -10,6 +10,7 @@ export default function App() {
   const [carColor, setCarColor] = useState<string>("#3b82f6");
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
   // Initialize unique stable player ID and register nickname
@@ -56,12 +57,14 @@ export default function App() {
     localStorage.setItem("racer_player_nickname", name);
   };
 
-  const handleStartGame = (trackId: string, multiplayerMode: boolean) => {
+  const handleStartGame = (trackId: string, multiplayerMode: boolean, roomCode?: string) => {
     setIsMultiplayer(multiplayerMode);
+    setActiveRoomCode(roomCode || null);
     setActiveTrackId(trackId);
   };
 
   const handleExitGame = () => {
+    setActiveRoomCode(null);
     setActiveTrackId(null);
   };
 
@@ -110,6 +113,7 @@ export default function App() {
               carColor={carColor}
               trackId={activeTrackId}
               isMultiplayer={isMultiplayer}
+              roomCode={activeRoomCode || undefined}
               onExit={handleExitGame}
             />
           </motion.div>

@@ -11,7 +11,7 @@ interface MainMenuProps {
   carColor: string;
   setNickname: (val: string) => void;
   setCarColor: (val: string) => void;
-  onStartGame: (trackId: string, isMultiplayer: boolean) => void;
+  onStartGame: (trackId: string, isMultiplayer: boolean, roomCode?: string) => void;
 }
 
 export function formatTime(ms: number): string {
@@ -47,6 +47,9 @@ export function MainMenu({
   const [leaderboard, setLeaderboard] = useState<RaceRecord[]>([]);
   const [isNameSaving, setIsNameSaving] = useState(false);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+
+  const [multiplayerAction, setMultiplayerAction] = useState<"create" | "join">("create");
+  const [inputRoomCode, setInputRoomCode] = useState<string>("");
 
   // Load Leaderboard for selected track
   useEffect(() => {
@@ -217,6 +220,56 @@ export function MainMenu({
                 <span className="text-[10px] text-slate-500 mt-1">Real-time Ghost Sync</span>
               </button>
             </div>
+
+            {isMultiplayer && (
+              <div className="mt-4 pt-4 border-t border-slate-800/60 space-y-3">
+                <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setMultiplayerAction("create")}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md uppercase tracking-wide cursor-pointer text-center transition-all ${
+                      multiplayerAction === "create"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Create Room
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMultiplayerAction("join")}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-md uppercase tracking-wide cursor-pointer text-center transition-all ${
+                      multiplayerAction === "join"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Join Room
+                  </button>
+                </div>
+
+                {multiplayerAction === "create" ? (
+                  <p className="text-[11px] text-indigo-300 leading-relaxed font-sans">
+                    💡 Starting the grid will generate a unique 4-digit room code for your friends to enter.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Room Code (4 Digits)</label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={inputRoomCode}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, "");
+                        setInputRoomCode(val);
+                      }}
+                      placeholder="e.g., 4018"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm font-black tracking-widest text-indigo-400 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Cockpit controls instructions */}
@@ -420,8 +473,24 @@ export function MainMenu({
               
               <button
                 id="launch-race-button"
-                onClick={() => onStartGame(selectedTrackId, isMultiplayer)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-blue-600/10 hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group"
+                disabled={isMultiplayer && multiplayerAction === "join" && inputRoomCode.length < 4}
+                onClick={() => {
+                  if (isMultiplayer) {
+                    if (multiplayerAction === "create") {
+                      const code = Math.floor(1000 + Math.random() * 9000).toString();
+                      onStartGame(selectedTrackId, true, code);
+                    } else {
+                      onStartGame(selectedTrackId, true, inputRoomCode);
+                    }
+                  } else {
+                    onStartGame(selectedTrackId, false);
+                  }
+                }}
+                className={`w-full sm:w-auto flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-blue-600/10 hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group ${
+                  isMultiplayer && multiplayerAction === "join" && inputRoomCode.length < 4
+                    ? "opacity-50 cursor-not-allowed hover:scale-100"
+                    : ""
+                }`}
               >
                 Assemble Grid
                 <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />

@@ -53,4 +53,5 @@ export interface OpponentState {
   wheelsAngle: number;
   isDrifting: boolean;
   lastUpdated: number;
+  roomCode?: string;
 }

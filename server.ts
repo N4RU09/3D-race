@@ -47,6 +47,7 @@ interface MultiplayerState {
   wheelsAngle: number;
   isDrifting: boolean;
   lastUpdated: number;
+  roomCode?: string;
 }
 
 const DB_FILE = path.join(process.cwd(), "db.json");
@@ -247,7 +248,7 @@ async function startServer() {
 
   // 5. Multiplayer Realtime Synchronizer
   app.post("/api/multiplayer/sync", (req, res) => {
-    const { id, nickname, trackId, color, x, y, z, heading, speed, wheelsAngle, isDrifting } = req.body;
+    const { id, nickname, trackId, color, x, y, z, heading, speed, wheelsAngle, isDrifting, roomCode } = req.body;
 
     if (!id || !trackId) {
       res.status(400).json({ error: "id and trackId are required." });
@@ -268,12 +269,13 @@ async function startServer() {
       wheelsAngle: typeof wheelsAngle === "number" ? wheelsAngle : 0,
       isDrifting: !!isDrifting,
       lastUpdated: Date.now(),
+      roomCode: roomCode || "",
     };
 
     // Clean up expired players (inactive for > 4 seconds)
     const now = Date.now();
     const activePlayers = Object.values(multiplayerLobby).filter(
-      (p) => p.id !== id && p.trackId === trackId && now - p.lastUpdated < 4000
+      (p) => p.id !== id && p.trackId === trackId && (p.roomCode || "") === (roomCode || "") && now - p.lastUpdated < 4000
     );
 
     res.json(activePlayers);

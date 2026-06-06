@@ -19,6 +19,7 @@ interface GameHUDProps {
   onTouchControl: (control: string, active: boolean) => void;
   boosterCharge?: number;
   isBoosting?: boolean;
+  roomCode?: string;
 }
 
 export function GameHUD({
@@ -37,6 +38,7 @@ export function GameHUD({
   onTouchControl,
   boosterCharge = 0,
   isBoosting = false,
+  roomCode,
 }: GameHUDProps) {
   // Convert standard internal speed to realistic KM/H for visual effect
   const displaySpeed = Math.round(Math.abs(speed) * 3.6);
@@ -79,6 +81,16 @@ export function GameHUD({
 
         {/* Dynamic High-precision Timer Panel */}
         <div className="flex flex-col items-end gap-2">
+          {isMultiplayer && roomCode && (
+            <div className="bg-gradient-to-r from-indigo-950/90 to-slate-950/95 border border-indigo-500/30 px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 pointer-events-auto">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+              <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Room:</span>
+              <span className="text-sm font-black text-indigo-300 font-mono tracking-widest select-all" title="Click to copy room code">
+                {roomCode}
+              </span>
+            </div>
+          )}
+
           <div className="bg-slate-950/85 border border-slate-900 p-4 rounded-2xl shadow-xl text-right min-w-[140px]">
             <span className="text-[10px] text-rose-400 font-bold tracking-widest uppercase block mb-0.5">Race Timer</span>
             <span className="text-2xl font-black tabular-nums text-rose-100 tracking-wider">
@@ -189,7 +201,7 @@ export function GameHUD({
             <div className={`absolute left-0 bottom-0 top-0 w-2.5 transition-all duration-300 ${
               isBoosting
                 ? "bg-gradient-to-t from-cyan-400 to-blue-500 animate-pulse"
-                : boosterCharge >= 100
+                : boosterCharge > 0
                 ? "bg-gradient-to-t from-amber-500 to-yellow-400 animate-pulse"
                 : "bg-slate-800"
             }`} />
@@ -199,8 +211,8 @@ export function GameHUD({
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                   {isBoosting ? "🚀 NITRO BOOST!" : boosterCharge >= 100 ? "🔥 BOOSTER FULL" : "⚡ BOOSTER CHARGE"}
                 </span>
-                <span className={`text-[10px] font-black ${isBoosting ? "text-cyan-400 animate-pulse" : boosterCharge >= 100 ? "text-amber-400 animate-bounce" : "text-slate-400"}`}>
-                  {isBoosting ? "BURNING" : boosterCharge >= 100 ? "READY" : `${Math.round(boosterCharge)}%`}
+                <span className={`text-[10px] font-black ${isBoosting ? "text-cyan-400 animate-pulse" : boosterCharge > 0 ? "text-amber-400 animate-pulse" : "text-slate-400"}`}>
+                  {isBoosting ? "BURNING" : boosterCharge > 0 ? "READY" : `${Math.round(boosterCharge)}%`}
                 </span>
               </div>
               
@@ -210,9 +222,9 @@ export function GameHUD({
                   className={`h-full rounded-full transition-all duration-100 ${
                     isBoosting
                       ? "bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse"
-                      : boosterCharge >= 100
+                      : boosterCharge > 0
                       ? "bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-400 animate-pulse"
-                      : "bg-gradient-to-r from-slate-600 via-indigo-600 to-fuchsia-500"
+                      : "bg-gradient-to-r from-slate-600 via-indigo-650 to-fuchsia-500"
                   }`}
                   style={{ width: `${boosterCharge}%` }}
                 />
@@ -221,7 +233,7 @@ export function GameHUD({
               <span className="text-[10px] text-slate-500 mt-1.5 block font-sans">
                 {isBoosting ? (
                   <span className="text-cyan-400 font-bold">WARP SPEED ACTIVE</span>
-                ) : boosterCharge >= 100 ? (
+                ) : boosterCharge > 0 ? (
                   <span className="text-amber-300 font-bold animate-pulse">PRESS SHIFT TO ACTIVATE</span>
                 ) : (
                   "Drift through curves to charge"
@@ -273,20 +285,20 @@ export function GameHUD({
 
             {/* Dynamic Boost Tap Button */}
             <button
-              onMouseDown={() => { if (boosterCharge >= 100 || isBoosting) onTouchControl("boost", true); }}
+              onMouseDown={() => { if (boosterCharge > 0) onTouchControl("boost", true); }}
               onMouseUp={() => onTouchControl("boost", false)}
               onMouseLeave={() => onTouchControl("boost", false)}
-              onTouchStart={(e) => { e.preventDefault(); if (boosterCharge >= 100 || isBoosting) onTouchControl("boost", true); }}
+              onTouchStart={(e) => { e.preventDefault(); if (boosterCharge > 0) onTouchControl("boost", true); }}
               onTouchEnd={(e) => { e.preventDefault(); onTouchControl("boost", false); }}
               className={`w-14 h-12 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${
                 isBoosting
                   ? "bg-gradient-to-br from-cyan-400 to-blue-600 text-white font-extrabold border-cyan-300 animate-pulse"
-                  : boosterCharge >= 100
+                  : boosterCharge > 0
                   ? "bg-gradient-to-br from-amber-500 to-yellow-500 text-white font-extrabold border-amber-300 animate-bounce"
                   : "bg-slate-950/40 text-slate-600 border-slate-900/40 cursor-not-allowed"
               }`}
             >
-              <Flame className={`w-4 h-4 ${isBoosting || boosterCharge >= 100 ? "animate-pulse" : ""}`} />
+              <Flame className={`w-4 h-4 ${isBoosting || boosterCharge > 0 ? "animate-pulse" : ""}`} />
               <span className="text-[9px] uppercase tracking-wider font-extrabold mt-0.5">Boost</span>
             </button>
 

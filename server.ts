@@ -1,0 +1,221 @@
+import express from "express";
+import path from "path";
+import fs from "fs";
+import { createServer as createViteServer } from "vite";
+
+interface Player {
+  id: string;
+  nickname: string;
+  createdAt: string;
+}
+
+interface RaceRecord {
+  id: string;
+  playerId: string;
+  nickname: string;
+  trackId: string;
+  finishTimeMs: number;
+  createdAt: string;
+}
+
+interface MultiplayerState {
+  id: string;
+  nickname: string;
+  trackId: string;
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+  heading: number;
+  speed: number;
+  wheelsAngle: number;
+  isDrifting: boolean;
+  lastUpdated: number;
+}
+
+const DB_FILE = path.join(process.cwd(), "db.json");
+
+// Default initial tracks info
+const TRACK_DATA = [
+  { id: "track-1", name: "Track 1: Beginner Speedway", difficulty: 1, description: "Broad high-speed turns designed for entry-level drivers." },
+  { id: "track-2", name: "Track 2: Lakeside Curve", difficulty: 2, description: "Vast, flowing curves bordering a beautiful scenic backdrop." },
+  { id: "track-3", name: "Track 3: Canyon Hairpins", difficulty: 3, description: "Tight mountainous bends requiring precise throttle adjustments." },
+  { id: "track-4", name: "Track 4: Elevation Shift", difficulty: 4, description: "Frequent rises and drops that momentarily lift tires off the asphalt." },
+  { id: "track-5", name: "Track 5: Alpine Maze", difficulty: 5, description: "A highly-complex multi-sequence combination calling for mastery." },
+  { id: "track-6", name: "Track 6: Antigravity Grid", difficulty: 6, description: "The ultimate test with extremely narrow boundaries, extreme curves, and sharp angles." }
+];
+
+// In-memory store
+let players: Record<string, Player> = {};
+let raceRecords: RaceRecord[] = [];
+const multiplayerLobby: Record<string, MultiplayerState> = {};
+
+// Load DB
+function loadDB() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const content = fs.readFileSync(DB_FILE, "utf-8");
+      const parsed = JSON.parse(content);
+      players = parsed.players || {};
+      raceRecords = parsed.raceRecords || [];
+      console.log(`Database loaded successfully. Records: ${raceRecords.length}, Players: ${Object.keys(players).length}`);
+    } else {
+      saveDB();
+    }
+  } catch (error) {
+    console.error("Failed to load DB, starting fresh", error);
+  }
+}
+
+// Save DB
+function saveDB() {
+  try {
+    const content = JSON.stringify({ players, raceRecords }, null, 2);
+    fs.writeFileSync(DB_FILE, content, "utf-8");
+  } catch (error) {
+    console.error("Failed to save DB", error);
+  }
+}
+
+async function startServer() {
+  loadDB();
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+
+  // 1. Get track listing
+  app.get("/api/tracks", (req, res) => {
+    res.json(TRACK_DATA);
+  });
+
+  // 2. Fetch leaderboards by track ID
+  app.get("/api/records/:trackId", (req, res) => {
+    const { trackId } = req.params;
+    const records = raceRecords
+      .filter((r) => r.trackId === trackId)
+      // Sort: ascending finishNameMs (faster is better), then oldest createdAt first
+      .sort((a, b) => {
+        if (a.finishTimeMs !== b.finishTimeMs) {
+          return a.finishTimeMs - b.finishTimeMs;
+        }
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+    res.json(records);
+  });
+
+  // 3. Register or edit player profile
+  app.post("/api/players", (req, res) => {
+    const { id, nickname } = req.body;
+    if (!id || !nickname) {
+      res.status(400).json({ error: "Missing id or nickname." });
+      return;
+    }
+
+    const currentNickname = nickname.trim().substring(0, 16) || "Racer";
+    players[id] = {
+      id,
+      nickname: currentNickname,
+      createdAt: players[id]?.createdAt || new Date().toISOString(),
+    };
+    saveDB();
+
+    // Update in multiplayer registry as well
+    if (multiplayerLobby[id]) {
+      multiplayerLobby[id].nickname = currentNickname;
+    }
+
+    res.json(players[id]);
+  });
+
+  // 4. Save new race record
+  app.post("/api/records", (req, res) => {
+    const { playerId, trackId, finishTimeMs } = req.body;
+    if (!playerId || !trackId || typeof finishTimeMs !== "number") {
+      res.status(400).json({ error: "Invalid parameters." });
+      return;
+    }
+
+    const player = players[playerId];
+    const nickname = player ? player.nickname : "Anonymous Racer";
+
+    const record: RaceRecord = {
+      id: "rec-" + Math.random().toString(36).substr(2, 9),
+      playerId,
+      nickname,
+      trackId,
+      finishTimeMs,
+      createdAt: new Date().toISOString(),
+    };
+
+    raceRecords.push(record);
+    saveDB();
+
+    res.json({ success: true, record });
+  });
+
+  // 5. Multiplayer Realtime Synchronizer
+  app.post("/api/multiplayer/sync", (req, res) => {
+    const { id, nickname, trackId, color, x, y, z, heading, speed, wheelsAngle, isDrifting } = req.body;
+
+    if (!id || !trackId) {
+      res.status(400).json({ error: "id and trackId are required." });
+      return;
+    }
+
+    // Register/update state in lobby
+    multiplayerLobby[id] = {
+      id,
+      nickname: (nickname || "Guest").substring(0, 16),
+      trackId,
+      color: color || "#3b82f6",
+      x: typeof x === "number" ? x : 0,
+      y: typeof y === "number" ? y : 0,
+      z: typeof z === "number" ? z : 0,
+      heading: typeof heading === "number" ? heading : 0,
+      speed: typeof speed === "number" ? speed : 0,
+      wheelsAngle: typeof wheelsAngle === "number" ? wheelsAngle : 0,
+      isDrifting: !!isDrifting,
+      lastUpdated: Date.now(),
+    };
+
+    // Clean up expired players (inactive for > 4 seconds)
+    const now = Date.now();
+    const activePlayers = Object.values(multiplayerLobby).filter(
+      (p) => p.id !== id && p.trackId === trackId && now - p.lastUpdated < 4000
+    );
+
+    res.json(activePlayers);
+  });
+
+  // Clean lobby periodically
+  setInterval(() => {
+    const now = Date.now();
+    Object.keys(multiplayerLobby).forEach((key) => {
+      if (now - multiplayerLobby[key].lastUpdated > 8000) {
+        delete multiplayerLobby[key];
+      }
+    });
+  }, 10000);
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

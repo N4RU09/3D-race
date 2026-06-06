@@ -17,6 +17,8 @@ interface GameHUDProps {
   driftCombo: number;
   // Touch event callbacks (for mobile support)
   onTouchControl: (control: string, active: boolean) => void;
+  boosterCharge?: number;
+  isBoosting?: boolean;
 }
 
 export function GameHUD({
@@ -33,6 +35,8 @@ export function GameHUD({
   countdown,
   driftCombo,
   onTouchControl,
+  boosterCharge = 0,
+  isBoosting = false,
 }: GameHUDProps) {
   // Convert standard internal speed to realistic KM/H for visual effect
   const displaySpeed = Math.round(Math.abs(speed) * 3.6);
@@ -146,34 +150,86 @@ export function GameHUD({
         )}
         {!isMultiplayer && <div className="hidden md:block w-3" />}
 
-        {/* Speedometer Gauges */}
-        <div className="bg-slate-950/85 border border-slate-900/80 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 min-w-[210px] relative overflow-hidden">
-          {/* Aesthetic speed arc background */}
-          <div className="absolute left-0 bottom-0 top-0 w-2.5 bg-gradient-to-t from-blue-600 via-indigo-500 to-rose-400" />
+        {/* Speedometer & Booster Gauges Cluster */}
+        <div className="flex flex-col sm:flex-row items-center gap-4">
           
-          <div className="pl-1">
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-black tracking-tighter tabular-nums text-white">
-                {displaySpeed}
-              </span>
-              <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">KM/H</span>
-            </div>
+          {/* Speedometer Gauges */}
+          <div className="bg-slate-950/85 border border-slate-900/80 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 min-w-[210px] relative overflow-hidden">
+            {/* Aesthetic speed arc background */}
+            <div className="absolute left-0 bottom-0 top-0 w-2.5 bg-gradient-to-t from-blue-600 via-indigo-500 to-rose-400" />
             
-            {/* Speed level progression bar */}
-            <div className="w-36 h-2 bg-slate-900 rounded-full mt-2 overflow-hidden border border-slate-800">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-rose-500 rounded-full transition-all duration-75"
-                style={{ width: `${Math.min(100, (displaySpeed / 200) * 100)}%` }}
-              />
+            <div className="pl-1">
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-black tracking-tighter tabular-nums text-white">
+                  {displaySpeed}
+                </span>
+                <span className="text-xs text-slate-500 font-bold uppercase tracking-widest">KM/H</span>
+              </div>
+              
+              {/* Speed level progression bar */}
+              <div className="w-36 h-2 bg-slate-900 rounded-full mt-2 overflow-hidden border border-slate-800">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-rose-500 rounded-full transition-all duration-75"
+                  style={{ width: `${Math.min(100, (displaySpeed / 200) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center border-l border-slate-900 pl-4 py-1.5">
+              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest block mb-0.5">RPM</span>
+              <span className="text-sm font-black text-indigo-400">
+                {Math.round(2000 + (displaySpeed / 200) * 6000)}
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-col items-center justify-center border-l border-slate-900 pl-4 py-1.5">
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest block mb-0.5">RPM</span>
-            <span className="text-sm font-black text-indigo-400">
-              {Math.round(2000 + (displaySpeed / 200) * 6000)}
-            </span>
+          {/* Booster Gauge Card */}
+          <div className="bg-slate-950/85 border border-slate-900/80 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-4 min-w-[245px] relative overflow-hidden">
+            {/* Accent colored side indicator */}
+            <div className={`absolute left-0 bottom-0 top-0 w-2.5 transition-all duration-300 ${
+              isBoosting
+                ? "bg-gradient-to-t from-cyan-400 to-blue-500 animate-pulse"
+                : boosterCharge >= 100
+                ? "bg-gradient-to-t from-amber-500 to-yellow-400 animate-pulse"
+                : "bg-slate-800"
+            }`} />
+            
+            <div className="pl-1 flex-1">
+              <div className="flex justify-between items-baseline gap-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  {isBoosting ? "🚀 NITRO BOOST!" : boosterCharge >= 100 ? "🔥 BOOSTER FULL" : "⚡ BOOSTER CHARGE"}
+                </span>
+                <span className={`text-[10px] font-black ${isBoosting ? "text-cyan-400 animate-pulse" : boosterCharge >= 100 ? "text-amber-400 animate-bounce" : "text-slate-400"}`}>
+                  {isBoosting ? "BURNING" : boosterCharge >= 100 ? "READY" : `${Math.round(boosterCharge)}%`}
+                </span>
+              </div>
+              
+              {/* Boost level progression bar */}
+              <div className="w-40 h-2 bg-slate-900 rounded-full mt-2 overflow-hidden border border-slate-800">
+                <div
+                  className={`h-full rounded-full transition-all duration-100 ${
+                    isBoosting
+                      ? "bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse"
+                      : boosterCharge >= 100
+                      ? "bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-400 animate-pulse"
+                      : "bg-gradient-to-r from-slate-600 via-indigo-600 to-fuchsia-500"
+                  }`}
+                  style={{ width: `${boosterCharge}%` }}
+                />
+              </div>
+              
+              <span className="text-[10px] text-slate-500 mt-1.5 block font-sans">
+                {isBoosting ? (
+                  <span className="text-cyan-400 font-bold">WARP SPEED ACTIVE</span>
+                ) : boosterCharge >= 100 ? (
+                  <span className="text-amber-300 font-bold animate-pulse">PRESS SHIFT TO ACTIVATE</span>
+                ) : (
+                  "Drift through curves to charge"
+                )}
+              </span>
+            </div>
           </div>
+
         </div>
 
         {/* Touch Button Controls (visible on screens, usable for steering on mobile) */}
@@ -214,6 +270,26 @@ export function GameHUD({
             >
               <Disc className="w-4 h-4 mr-0.5 animate-spin" /> Drift
             </button>
+
+            {/* Dynamic Boost Tap Button */}
+            <button
+              onMouseDown={() => { if (boosterCharge >= 100 || isBoosting) onTouchControl("boost", true); }}
+              onMouseUp={() => onTouchControl("boost", false)}
+              onMouseLeave={() => onTouchControl("boost", false)}
+              onTouchStart={(e) => { e.preventDefault(); if (boosterCharge >= 100 || isBoosting) onTouchControl("boost", true); }}
+              onTouchEnd={(e) => { e.preventDefault(); onTouchControl("boost", false); }}
+              className={`w-14 h-12 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                isBoosting
+                  ? "bg-gradient-to-br from-cyan-400 to-blue-600 text-white font-extrabold border-cyan-300 animate-pulse"
+                  : boosterCharge >= 100
+                  ? "bg-gradient-to-br from-amber-500 to-yellow-500 text-white font-extrabold border-amber-300 animate-bounce"
+                  : "bg-slate-950/40 text-slate-600 border-slate-900/40 cursor-not-allowed"
+              }`}
+            >
+              <Flame className={`w-4 h-4 ${isBoosting || boosterCharge >= 100 ? "animate-pulse" : ""}`} />
+              <span className="text-[9px] uppercase tracking-wider font-extrabold mt-0.5">Boost</span>
+            </button>
+
             <button
               onMouseDown={() => onTouchControl("forward", true)}
               onMouseUp={() => onTouchControl("forward", false)}

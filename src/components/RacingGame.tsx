@@ -37,6 +37,8 @@ export function RacingGame({
   const [opponents, setOpponents] = useState<{ nickname: string; speed: number; x: number; z: number }[]>([]);
   const [countdown, setCountdown] = useState<number | null>(3);
   const [gameResult, setGameResult] = useState<{ finishTimeMs: number; bestLapTimeMs: number; isHighScore: boolean } | null>(null);
+  const [boosterCharge, setBoosterCharge] = useState(0);
+  const [isBoosting, setIsBoosting] = useState(false);
 
   // References for Animation Loop (Avoid trigger state re-renders for core physics)
   const statsRef = useRef({
@@ -51,11 +53,14 @@ export function RacingGame({
     elapsedSinceStart: 0,
     bestLapTimeMs: Infinity,
     raceDone: false,
-    controls: { forward: false, backward: false, left: false, right: false, handbrake: false, respawn: false } as CarControlState,
+    controls: { forward: false, backward: false, left: false, right: false, handbrake: false, respawn: false, boost: false } as CarControlState,
     wheelsAngle: 0,
     isDrifting: false,
     driftPoints: 0,
     countdownActive: true,
+    isBoosting: false,
+    boosterCharge: 0,
+    boosterUnlocked: false,
   });
 
   const totalLaps = 3;
@@ -68,6 +73,7 @@ export function RacingGame({
     if (control === "forward") controls.forward = active;
     if (control === "backward") controls.backward = active;
     if (control === "handbrake") controls.handbrake = active;
+    if (control === "boost") controls.boost = active;
   };
 
   const handleManualRespawn = () => {
@@ -485,6 +491,19 @@ export function RacingGame({
       taillightR.position.set(0.8, 0.52, -2.22);
       carGroup.add(taillightR);
 
+      // Cyan Flame Thruster Exhaust
+      const thrusterMat = new THREE.MeshBasicMaterial({
+        color: 0x00f0ff,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const thrusterGeo = new THREE.CylinderGeometry(0.02, 0.35, 1.5, 8);
+      thrusterGeo.rotateX(Math.PI / 2); // Rotate to point backward
+      const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
+      thruster.position.set(0, 0.42, -2.25);
+      thruster.visible = false;
+      carGroup.add(thruster);
+
       // Save components for rotational animation inside loop
       return {
         mesh: carGroup,
@@ -494,6 +513,7 @@ export function RacingGame({
         wheelRearRight: wheelRR,
         bodyMaterial: bodyMat,
         brakeLights: [taillightL, taillightR],
+        thruster: thruster,
       };
     };
 
@@ -589,6 +609,9 @@ export function RacingGame({
         case "r":
           controls.respawn = true;
           break;
+        case "shift":
+          controls.boost = true;
+          break;
       }
     };
 
@@ -613,6 +636,9 @@ export function RacingGame({
           break;
         case " ":
           controls.handbrake = false;
+          break;
+        case "shift":
+          controls.boost = false;
           break;
       }
     };
@@ -642,21 +668,33 @@ export function RacingGame({
       });
     }
 
-    const spawnSmokeTrail = (pos: THREE.Vector3) => {
+    const spawnSmokeTrail = (pos: THREE.Vector3, isBooster: boolean = false) => {
       const p = smokeParticles.find((part) => !part.active);
       if (!p) return;
       p.active = true;
       p.age = 0;
       p.mesh.position.copy(pos);
-      p.mesh.scale.set(1, 1, 1);
+      p.mesh.scale.set(isBooster ? 1.5 : 1.0, isBooster ? 1.5 : 1.0, isBooster ? 1.5 : 1.0);
       p.mesh.visible = true;
-      (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0.5;
       
-      p.speed.set(
-        (Math.random() - 0.5) * 1.5,
-        Math.random() * 2.5,
-        (Math.random() - 0.5) * 1.5
-      );
+      const mat = p.mesh.material as THREE.MeshBasicMaterial;
+      if (isBooster) {
+        mat.color.setHex(0x00f0ff); // Cyan booster fire
+        mat.opacity = 0.85;
+        p.speed.set(
+          (Math.random() - 0.5) * 3.0,
+          (Math.random() - 0.5) * 1.0,
+          (Math.random() - 0.5) * 3.0
+        );
+      } else {
+        mat.color.setHex(0xcbd5e1); // Slate gray drift smoke
+        mat.opacity = 0.5;
+        p.speed.set(
+          (Math.random() - 0.5) * 1.5,
+          Math.random() * 2.5,
+          (Math.random() - 0.5) * 1.5
+        );
+      }
     };
 
     // --- RECURRING MULTIPLAYER SYNCER TIMERS ---
@@ -806,12 +844,43 @@ export function RacingGame({
       }
 
       // Speed accelerations and drift mechanics variables block
-      const targetMaxSpeed = isOffRoad ? 7.5 : 36.5; // (in units per sec, approx 25 vs 130 km/h)
-      const accelForce = 15.0;
+      st.isDrifting = st.controls.handbrake && Math.abs(st.speed) > 12.0 && Math.abs(st.wheelsAngle) > 0.12;
+
+      // Charge booster during drift when racing and countdown is complete (charges ~22% per second, total 4.5s)
+      if (st.isDrifting && !st.countdownActive && !st.raceDone) {
+        st.boosterCharge = Math.min(100, st.boosterCharge + 22.0 * dt);
+        if (st.boosterCharge >= 100) {
+          st.boosterUnlocked = true;
+        }
+      }
+
+      // Handle dynamic booster activation
+      if (st.boosterUnlocked && st.controls.boost && st.boosterCharge > 0 && !st.countdownActive && !st.raceDone) {
+        st.isBoosting = true;
+        // Drain booster charge over time (~38% depletion per second, approx 2.6s max duration)
+        st.boosterCharge = Math.max(0, st.boosterCharge - 38.0 * dt);
+        if (st.boosterCharge <= 0) {
+          st.isBoosting = false;
+          st.boosterUnlocked = false;
+        }
+      } else {
+        st.isBoosting = false;
+        // If booster runs empty, unlock standard charging cycle
+        if (st.boosterCharge <= 0) {
+          st.boosterUnlocked = false;
+        }
+      }
+
+      let targetMaxSpeed = isOffRoad ? 7.5 : 36.5; // (in units per sec, approx 25 vs 130 km/h)
+      let accelForce = 15.0;
       const brakesForce = 34.0;
       const standardDrag = 0.85;
 
-      st.isDrifting = st.controls.handbrake && Math.abs(st.speed) > 12.0 && Math.abs(st.wheelsAngle) > 0.12;
+      // Rocket boosted state!
+      if (st.isBoosting) {
+        targetMaxSpeed = isOffRoad ? 25.0 : 58.0; // Blast through roads and grass easily
+        accelForce = 45.0;
+      }
 
       if (st.controls.forward) {
         st.speed += accelForce * dt;
@@ -849,6 +918,22 @@ export function RacingGame({
       } else {
         if (st.driftPoints > 0) st.driftPoints = 0;
         setIsDrifting(false);
+      }
+
+      // Animate sports car back thruster and spawn exhaust cyan flame sparks
+      if (playerCar.thruster) {
+        if (st.isBoosting) {
+          playerCar.thruster.visible = true;
+          const scl = 0.8 + Math.random() * 0.4;
+          playerCar.thruster.scale.set(scl, scl, 1.3 + Math.random() * 0.6);
+          
+          if (Math.random() < 0.9) {
+            const exhaustPos = new THREE.Vector3(0, 0.42, -2.25).applyMatrix4(playerCar.mesh.matrixWorld);
+            spawnSmokeTrail(exhaustPos, true);
+          }
+        } else {
+          playerCar.thruster.visible = false;
+        }
       }
 
       st.heading += steeringEffort * dt;
@@ -978,11 +1063,20 @@ export function RacingGame({
       const lookAtTarget = new THREE.Vector3().copy(playerCar.mesh.position).add(new THREE.Vector3(0, 1.0, 0));
       camera.lookAt(lookAtTarget);
 
+      // Camera FOV dynamic performance speed stretch for drift booster warp
+      const targetFov = st.isBoosting ? 74 : 60;
+      if (Math.abs(camera.fov - targetFov) > 0.1) {
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 6.0 * dt);
+        camera.updateProjectionMatrix();
+      }
+
       // Render Viewport
       renderer.render(scene, camera);
 
-      // Sync state to UI HUD Speed
+      // Sync state to UI HUD Speed & Booster properties
       setSpeed(st.speed);
+      setBoosterCharge(st.boosterCharge);
+      setIsBoosting(st.isBoosting);
 
       frameId = requestAnimationFrame(tick);
     };
@@ -1061,6 +1155,8 @@ export function RacingGame({
           onExit={onExit}
           countdown={countdown}
           onTouchControl={handleTouchControl}
+          boosterCharge={boosterCharge}
+          isBoosting={isBoosting}
         />
       )}
 

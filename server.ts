@@ -2,6 +2,22 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { createClient } from "@supabase/supabase-js";
+
+// Supabase Connection initialization
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+const isSupabaseEnabled = !!(supabaseUrl && supabaseAnonKey);
+
+let supabase: any = null;
+if (isSupabaseEnabled) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log("Supabase core connection established server-side.");
+  } catch (error) {
+    console.error("Supabase failed initialization:", error);
+  }
+}
 
 interface Player {
   id: string;
@@ -90,8 +106,43 @@ async function startServer() {
   });
 
   // 2. Fetch leaderboards by track ID
-  app.get("/api/records/:trackId", (req, res) => {
+  app.get("/api/records/:trackId", async (req, res) => {
     const { trackId } = req.params;
+
+    if (isSupabaseEnabled && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("race_records")
+          .select("*")
+          .or(`trackId.eq.${trackId},track_id.eq.${trackId}`)
+          .limit(100);
+
+        if (!error && data) {
+          const formattedRecords = data
+            .map((item: any) => ({
+              id: item.id,
+              playerId: item.playerId ?? item.player_id,
+              nickname: item.nickname,
+              trackId: item.trackId ?? item.track_id,
+              finishTimeMs: Number(item.finishTimeMs ?? item.finish_time_ms),
+              createdAt: item.createdAt ?? item.created_at,
+            }))
+            .sort((a: any, b: any) => {
+              if (a.finishTimeMs !== b.finishTimeMs) {
+                return a.finishTimeMs - b.finishTimeMs;
+              }
+              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            });
+
+          res.json(formattedRecords);
+          return;
+        }
+        console.error("Supabase query failed, using local JSON store:", error);
+      } catch (err) {
+        console.error("Supabase fetch exception, defaulting to local JSON:", err);
+      }
+    }
+
     const records = raceRecords
       .filter((r) => r.trackId === trackId)
       // Sort: ascending finishNameMs (faster is better), then oldest createdAt first
@@ -105,7 +156,7 @@ async function startServer() {
   });
 
   // 3. Register or edit player profile
-  app.post("/api/players", (req, res) => {
+  app.post("/api/players", async (req, res) => {
     const { id, nickname } = req.body;
     if (!id || !nickname) {
       res.status(400).json({ error: "Missing id or nickname." });
@@ -113,11 +164,13 @@ async function startServer() {
     }
 
     const currentNickname = nickname.trim().substring(0, 16) || "Racer";
-    players[id] = {
+    const playerObj = {
       id,
       nickname: currentNickname,
       createdAt: players[id]?.createdAt || new Date().toISOString(),
     };
+
+    players[id] = playerObj;
     saveDB();
 
     // Update in multiplayer registry as well
@@ -125,11 +178,27 @@ async function startServer() {
       multiplayerLobby[id].nickname = currentNickname;
     }
 
+    // Try Supabase synchronization
+    if (isSupabaseEnabled && supabase) {
+      try {
+        await supabase
+          .from("players")
+          .upsert({
+            id: id,
+            nickname: currentNickname,
+            created_at: playerObj.createdAt,
+            createdAt: playerObj.createdAt
+          }, { onConflict: 'id' });
+      } catch (err) {
+        console.error("Supabase driver synchronization failed:", err);
+      }
+    }
+
     res.json(players[id]);
   });
 
   // 4. Save new race record
-  app.post("/api/records", (req, res) => {
+  app.post("/api/records", async (req, res) => {
     const { playerId, trackId, finishTimeMs } = req.body;
     if (!playerId || !trackId || typeof finishTimeMs !== "number") {
       res.status(400).json({ error: "Invalid parameters." });
@@ -150,6 +219,28 @@ async function startServer() {
 
     raceRecords.push(record);
     saveDB();
+
+    // Try Supabase storage
+    if (isSupabaseEnabled && supabase) {
+      try {
+        await supabase
+          .from("race_records")
+          .insert({
+            id: record.id,
+            player_id: playerId,
+            playerId: playerId,
+            nickname: nickname,
+            track_id: trackId,
+            trackId: trackId,
+            finish_time_ms: finishTimeMs,
+            finishTimeMs: finishTimeMs,
+            created_at: record.createdAt,
+            createdAt: record.createdAt
+          });
+      } catch (err) {
+        console.error("Supabase record submission sync failed:", err);
+      }
+    }
 
     res.json({ success: true, record });
   });

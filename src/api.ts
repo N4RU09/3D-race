@@ -75,3 +75,53 @@ export async function syncMultiplayer(state: {
     return [];
   }
 }
+
+export interface LobbyPlayer {
+  id: string;
+  nickname: string;
+  color: string;
+  isReady: boolean;
+}
+
+export interface LobbyResponse {
+  status: "waiting" | "playing";
+  trackId: string;
+  hostId: string;
+  members: LobbyPlayer[];
+}
+
+export async function lobbyPing(state: {
+  id: string;
+  nickname: string;
+  trackId: string;
+  color: string;
+  roomCode: string;
+  isReady: boolean;
+}): Promise<LobbyResponse | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/multiplayer/lobby-ping`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch (error) {
+    console.warn("Lobby ping failed:", error);
+    return null;
+  }
+}
+
+export async function triggerLobbyStart(roomCode: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/multiplayer/lobby-start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomCode }),
+    });
+    return res.ok;
+  } catch (error) {
+    console.warn("Failed to trigger lobby launch:", error);
+    return false;
+  }
+}

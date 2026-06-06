@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Track, RaceRecord, PlayerProfile } from "../types";
 import { TRACK_CONFIGS } from "../tracksData";
-import { fetchLeaderboard, registerPlayer, fetchDbStatus, DbStatus } from "../api";
+import { fetchLeaderboard, registerPlayer, fetchDbStatus, DbStatus, lobbyPing, triggerLobbyStart, LobbyPlayer } from "../api";
 import { Trophy, Play, Users, User, Palette, Keyboard, Crown, Database, AlertCircle, Copy, Check, Info, X } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -50,6 +50,63 @@ export function MainMenu({
 
   const [multiplayerAction, setMultiplayerAction] = useState<"create" | "join">("create");
   const [inputRoomCode, setInputRoomCode] = useState<string>("");
+
+  const [activeLobbyCode, setActiveLobbyCode] = useState<string | null>(null);
+  const [lobbyMembers, setLobbyMembers] = useState<LobbyPlayer[]>([]);
+  const [isLobbyReady, setIsLobbyReady] = useState<boolean>(false);
+  const [lobbyHostId, setLobbyHostId] = useState<string>("");
+  const [lobbyTrackId, setLobbyTrackId] = useState<string>("");
+
+  // Poll lobby players while sitting inside a lobby
+  useEffect(() => {
+    if (!activeLobbyCode) return;
+
+    let active = true;
+    let timerId: any = null;
+
+    async function tick() {
+      try {
+        const res = await lobbyPing({
+          id: playerId,
+          nickname: nickname || "Racer",
+          trackId: selectedTrackId,
+          color: carColor,
+          roomCode: activeLobbyCode,
+          isReady: isLobbyReady,
+        });
+
+        if (!active || !res) return;
+
+        setLobbyMembers(res.members);
+        setLobbyHostId(res.hostId);
+        setLobbyTrackId(res.trackId);
+
+        // If host updated track, enforce update on users choice
+        if (res.hostId !== playerId && res.trackId && res.trackId !== selectedTrackId) {
+          setSelectedTrackId(res.trackId);
+        }
+
+        // If rooms status goes "playing", immediately enter 3D sequence
+        if (res.status === "playing") {
+          active = false;
+          setActiveLobbyCode(null);
+          onStartGame(res.trackId, true, activeLobbyCode);
+        }
+      } catch (err) {
+        console.error("Lobby polling error:", err);
+      }
+    }
+
+    // Trigger initial immediately
+    tick();
+
+    timerId = setInterval(tick, 1500);
+
+    return () => {
+      active = false;
+      if (timerId) clearInterval(timerId);
+    };
+  }, [activeLobbyCode, playerId, nickname, selectedTrackId, carColor, isLobbyReady, onStartGame]);
 
   const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
   const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
@@ -139,9 +196,210 @@ export function MainMenu({
       </header>
 
       {/* Main Grid Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-        
-        {/* Left Column - Setup & Options (5 cols) */}
+      {activeLobbyCode ? (
+        <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center relative z-10 animate-fade-in">
+          <div className="w-full bg-slate-900/90 border border-slate-800/80 rounded-3xl p-6 md:p-8 backdrop-blur-md shadow-2xl space-y-6">
+            
+            {/* Lobby Header */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest font-mono">MULTIPLAYER ROOM LOBBY</span>
+                </div>
+                <h2 className="text-3xl font-black italic tracking-wide text-white mt-1">대기방 로비</h2>
+                <p className="text-xs text-slate-400 mt-1">대기방에 참가한 사람들과 함께 실시간으로 레이스를 준비하세요.</p>
+              </div>
+              
+              <div className="bg-slate-950/80 border border-slate-800 px-5 py-3 rounded-2xl flex flex-col items-center md:items-end font-mono">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-0.5">ROOM CODE</span>
+                <span className="text-2xl font-black text-indigo-400 tracking-widest animate-pulse">{activeLobbyCode}</span>
+              </div>
+            </div>
+
+            {/* Room Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-left">
+              
+              {/* Left Side: Drivers list (7 cols) */}
+              <div className="md:col-span-7 space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">
+                  참가한 운전자 목록 ({lobbyMembers.length} 명)
+                </h3>
+                
+                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                  {lobbyMembers.map((member) => {
+                    const isHost = member.id === lobbyHostId;
+                    const isMe = member.id === playerId;
+                    return (
+                      <div
+                        key={member.id}
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                          isMe 
+                            ? "bg-slate-950/85 border-indigo-500/40 shadow-md shadow-indigo-500/5" 
+                            : "bg-slate-950/40 border-slate-800/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Avatar Paint Circle */}
+                          <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center border shadow-inner"
+                            style={{ 
+                              backgroundColor: `${member.color}15`, 
+                              borderColor: member.color 
+                            }}
+                          >
+                            <span 
+                              className="w-3.5 h-3.5 rounded-full shadow-md animate-pulse"
+                              style={{ backgroundColor: member.color }}
+                            />
+                          </div>
+                          
+                          <div>
+                            <span className="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                              {member.nickname}
+                              {isMe && (
+                                <span className="text-[9px] bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 px-1.5 py-0.5 rounded uppercase font-mono tracking-wider font-normal">
+                                  You
+                                </span>
+                              )}
+                              {isHost && (
+                                <span className="text-[9px] bg-amber-500/15 text-amber-505 border border-amber-500/25 px-1.5 py-0.5 rounded uppercase font-mono tracking-wider font-normal flex items-center gap-0.5">
+                                  <Crown className="w-2.5 h-2.5 text-amber-500" /> Host
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-[10px] text-slate-550 block font-mono mt-0.5">ID: {member.id.substring(0, 8)}...</span>
+                          </div>
+                        </div>
+
+                        {/* Status label */}
+                        <div>
+                          {isHost ? (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 bg-amber-500/5 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+                              READY
+                            </span>
+                          ) : member.isReady ? (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5 text-emerald-400" /> READY
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 bg-slate-950 border border-slate-850 px-2.5 py-1 rounded-lg">
+                              WAITING
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {lobbyMembers.length === 0 && (
+                    <div className="text-center py-12 text-slate-650 border border-dashed border-slate-800 rounded-xl bg-slate-950/10 animate-pulse font-mono text-xs">
+                      WAITING FOR TELEMETRY CONNECTIVITIES...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side: Track info & Ready Action (5 cols) */}
+              <div className="md:col-span-5 flex flex-col justify-between bg-slate-950/50 border border-slate-850 rounded-2xl p-5 space-y-6">
+                
+                {/* Track Details */}
+                <div className="space-y-3.5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">SELECTED CORRIDOR</span>
+                  
+                  <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950/80 p-4">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+                    <span className="text-xs font-mono font-bold text-indigo-400">DIFF: ★{selectedTrack.difficulty}</span>
+                    <h4 className="font-extrabold text-base text-slate-100 mt-1">{selectedTrack.name}</h4>
+                    <p className="text-[11px] text-slate-400 leading-relaxed mt-1.5">{selectedTrack.description}</p>
+                  </div>
+
+                  {/* If you are host, you can select track as well! */}
+                  {playerId === lobbyHostId ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-1">트랙 변경 (방장 전용)</label>
+                      <select
+                        value={selectedTrackId}
+                        onChange={(e) => setSelectedTrackId(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-300 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer shadow-inner"
+                      >
+                        {TRACK_CONFIGS.map((track) => (
+                          <option key={track.id} value={track.id}>
+                            {track.name} (★{track.difficulty})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 leading-relaxed italic pl-1">
+                      💡 방장(Host)이 선택한 트랙과 실시간 동기화됩니다.
+                    </p>
+                  )}
+                </div>
+
+                {/* Operations & Action Trigger */}
+                <div className="space-y-3">
+                  {playerId === lobbyHostId ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const success = await triggerLobbyStart(activeLobbyCode);
+                        if (success) {
+                          setActiveLobbyCode(null);
+                          onStartGame(selectedTrackId, true, activeLobbyCode);
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black py-3 px-5 rounded-xl shadow-lg shadow-indigo-600/10 hover:shadow-indigo-500/25 transition-all outline-none cursor-pointer text-xs uppercase tracking-wider group active:scale-[0.98]"
+                    >
+                      <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />
+                      레이스 시작 (START RACE)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsLobbyReady(!isLobbyReady)}
+                      className={`w-full flex items-center justify-center gap-2 font-black py-3 px-5 rounded-xl transition-all outline-none cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98] ${
+                        isLobbyReady
+                          ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/15"
+                          : "bg-slate-800 hover:bg-slate-755 text-slate-350 border border-slate-700"
+                      }`}
+                    >
+                      {isLobbyReady ? (
+                        <>
+                          <Check className="w-4 h-4 text-white shrink-0" />
+                          레이스 준비 완료함 (READY)
+                        </>
+                      ) : (
+                        "준비하기 (READY)"
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveLobbyCode(null);
+                      setIsLobbyReady(false);
+                    }}
+                    className="w-full hover:bg-slate-900 border border-slate-800/85 hover:border-slate-700 text-slate-400 hover:text-white font-bold py-2.5 px-5 rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"
+                  >
+                    대기방 나가기 (Leave Room)
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        </main>
+      ) : (
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
+          
+          {/* Left Column - Setup & Options (5 cols) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
           {/* Profile Card */}
@@ -534,9 +792,13 @@ export function MainMenu({
                   if (isMultiplayer) {
                     if (multiplayerAction === "create") {
                       const code = Math.floor(1000 + Math.random() * 9000).toString();
-                      onStartGame(selectedTrackId, true, code);
+                      setActiveLobbyCode(code);
+                      setIsLobbyReady(true); // Host is automatically ready
                     } else {
-                      onStartGame(selectedTrackId, true, inputRoomCode);
+                      if (inputRoomCode.length === 4) {
+                        setActiveLobbyCode(inputRoomCode);
+                        setIsLobbyReady(false);
+                      }
                     }
                   } else {
                     onStartGame(selectedTrackId, false);
@@ -558,6 +820,7 @@ export function MainMenu({
         </div>
 
       </main>
+      )}
 
       {/* Footer detailing project */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-slate-500 text-xs mt-auto font-mono">

@@ -188,7 +188,7 @@ export function MainMenu({
               Game Mode
             </h2>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-5">
               <button
                 type="button"
                 onClick={() => setIsMultiplayer(false)}
@@ -215,6 +215,24 @@ export function MainMenu({
                 <Users className="w-5 h-5 mb-2 text-indigo-400" />
                 <span className="text-xs font-bold uppercase tracking-wider">Multiplayer</span>
                 <span className="text-[10px] text-slate-500 mt-1">Real-time Ghost Sync</span>
+              </button>
+            </div>
+
+            {/* HIGHLY VISIBLE PRIMARY RACE PLAY BUTTON */}
+            <div className="pt-2 border-t border-slate-800/40">
+              <button
+                id="main-play-button"
+                onClick={() => onStartGame(selectedTrackId, isMultiplayer)}
+                className="w-full flex flex-col items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:from-emerald-400 hover:to-cyan-400 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-emerald-500/10 hover:shadow-emerald-400/20 hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer text-center relative group overflow-hidden"
+              >
+                <span className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="flex items-center gap-2 text-base tracking-wider uppercase font-extrabold">
+                  <Play className="w-5 h-5 fill-white animate-pulse" />
+                  RACE START / 게임 시작
+                </div>
+                <span className="text-[10px] font-sans text-emerald-100 font-medium tracking-normal">
+                  Click to start on: <strong className="font-bold underline">{selectedTrack.name.split(":")[1] || selectedTrack.name}</strong>
+                </span>
               </button>
             </div>
           </section>
@@ -421,9 +439,9 @@ export function MainMenu({
               <button
                 id="launch-race-button"
                 onClick={() => onStartGame(selectedTrackId, isMultiplayer)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-blue-600/10 hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group"
+                className="w-full sm:w-auto flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:from-emerald-400 hover:to-cyan-400 text-white font-black py-4 px-8 rounded-xl shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group"
               >
-                Assemble Grid
+                RACE START / 게임 시작
                 <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>

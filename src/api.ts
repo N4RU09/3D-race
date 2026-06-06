@@ -34,6 +34,20 @@ export async function submitRaceRecord(playerId: string, trackId: string, finish
   return res.json();
 }
 
+export interface DbStatus {
+  supabaseEnabled: boolean;
+  supabaseUrl: string;
+  healthy: boolean;
+  error: any;
+  sqlScript: string;
+}
+
+export async function fetchDbStatus(): Promise<DbStatus> {
+  const res = await fetch(`${API_BASE}/api/db-status`);
+  if (!res.ok) throw new Error("Failed to fetch database status");
+  return res.json();
+}
+
 export async function syncMultiplayer(state: {
   id: string;
   nickname: string;

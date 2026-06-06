@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Track, RaceRecord, PlayerProfile } from "../types";
 import { TRACK_CONFIGS } from "../tracksData";
-import { fetchLeaderboard, registerPlayer } from "../api";
-import { Trophy, Play, Users, User, Palette, Keyboard, Crown } from "lucide-react";
+import { fetchLeaderboard, registerPlayer, fetchDbStatus, DbStatus } from "../api";
+import { Trophy, Play, Users, User, Palette, Keyboard, Crown, Database, AlertCircle, Copy, Check, Info, X } from "lucide-react";
 import { motion } from "motion/react";
 
 interface MainMenuProps {
@@ -50,6 +50,23 @@ export function MainMenu({
 
   const [multiplayerAction, setMultiplayerAction] = useState<"create" | "join">("create");
   const [inputRoomCode, setInputRoomCode] = useState<string>("");
+
+  const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
+  const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+  const [copiedSql, setCopiedSql] = useState<boolean>(false);
+
+  const loadDbStatus = async () => {
+    try {
+      const status = await fetchDbStatus();
+      setDbStatus(status);
+    } catch (err) {
+      console.error("Failed checking database connectivity:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadDbStatus();
+  }, [leaderboard]);
 
   // Load Leaderboard for selected track
   useEffect(() => {
@@ -395,6 +412,45 @@ export function MainMenu({
               </div>
             </div>
 
+            {/* Supabase connection status alerts */}
+            {dbStatus && dbStatus.supabaseEnabled && (
+              dbStatus.healthy ? (
+                <div className="mb-4 px-4 py-3 rounded-xl border border-emerald-500/20 bg-emerald-950/10 text-emerald-400 text-xs flex items-center justify-between shadow-sm animate-fade-in font-sans">
+                  <div className="flex items-center gap-2.5 font-semibold">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-555"></span>
+                    </span>
+                    <span>Supabase 클라우드 데이터베이스 연동 활성화 완료</span>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded font-mono border border-emerald-500/10">Connected</span>
+                </div>
+              ) : (
+                <div className="mb-4 p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs leading-relaxed space-y-2.5 font-sans animate-pulse">
+                  <div className="flex items-center gap-2 font-bold text-amber-200 uppercase tracking-wide">
+                    <AlertCircle className="w-4.5 h-4.5 text-amber-400 shrink-0" />
+                    <span>Supabase 연결 상태: 테이블 설정 필요 ⚠️</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    환경 변수가 주입되었으나 필수 테이블(<code className="bg-slate-950 px-1.5 py-0.5 rounded text-amber-200 font-mono">players</code>, <code className="bg-slate-950 px-1.5 py-0.5 rounded text-amber-200 font-mono">race_records</code>)이 아직 데이터베이스 상에 존재하지 않아 기록이 저장되지 않습니다.
+                  </p>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCopiedSql(false);
+                        setShowSqlModal(true);
+                      }}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg transition-all cursor-pointer text-[10px] uppercase tracking-wider"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      테이블 자동 생성 SQL 스크립트 복사하기
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+
             {loadingLeaderboard ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-slate-400">
                 <div className="w-8 h-8 rounded-full border-2 border-slate-800 border-t-white animate-spin mb-4" />
@@ -507,6 +563,91 @@ export function MainMenu({
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-slate-500 text-xs mt-auto font-mono">
         <p>© 2026 3D RACE — Real-time Physics Engine Simulator. Designed in React + Three.js.</p>
       </footer>
+
+      {/* SQL Script Instruction Modal Overlay */}
+      {showSqlModal && dbStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] flex flex-col font-sans">
+            <button
+              type="button"
+              onClick={() => setShowSqlModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-slate-850 pb-3 mb-4">
+              <Database className="w-6 h-6 text-amber-500 animate-pulse" />
+              <div>
+                <h3 className="font-bold text-base text-white">Supabase 데이터베이스 연동 및 테이블 설정 가이드</h3>
+                <p className="text-xs text-slate-400 mt-0.5">3D 레이싱 게임의 실시간 멀티플레이어 기록을 클라우드에 영구 저장합니다.</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              <div className="bg-slate-950/40 border border-slate-850 p-3.5 rounded-xl space-y-2">
+                <span className="text-[10px] font-bold text-amber-400 tracking-wider uppercase font-mono block">💡 간편 해결 절차 (30초 소요):</span>
+                <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5 leading-relaxed pl-1">
+                  <li>본인의 <strong>Supabase 대시보드</strong>에 로그인합니다.</li>
+                  <li>좌측 탭에서 <strong>SQL Editor</strong> 메뉴를 클릭합니다.</li>
+                  <li><strong>New Query</strong> 버튼을 누른 다음, 아래 스크립트를 전체 복사해 입력 창에 붙여넣습니다.</li>
+                  <li>창 우측 하단의 <strong>Run</strong> (혹은 Cmd/Ctrl + Enter) 버튼을 눌러 스크립트를 활성화합니다!</li>
+                </ol>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between pl-1">
+                  <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold font-mono">SQL Generation Output:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(dbStatus.sqlScript);
+                      setCopiedSql(true);
+                      setTimeout(() => setCopiedSql(false), 2000);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      copiedSql
+                        ? "bg-emerald-600 text-white"
+                        : "bg-indigo-600 hover:bg-indigo-550 text-white"
+                    }`}
+                  >
+                    {copiedSql ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        복사 완료!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        스크립트 복사
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="relative">
+                  <pre className="bg-slate-950 text-[11px] text-indigo-300 p-4 rounded-xl font-mono overflow-x-auto max-h-[300px] border border-slate-800 border-dashed leading-relaxed select-all">
+                    {dbStatus.sqlScript}
+                  </pre>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400 text-center leading-relaxed font-sans">
+                ⚠️ 테이블 생성이 완료되면 기록 주기를 기다릴 필요 없이 상단 상태 배지가 <span className="text-emerald-400 font-bold">🟢 연동 성공</span> 상태로 즉시 변경됩니다!
+              </p>
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-slate-850 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSqlModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all text-xs cursor-pointer uppercase tracking-wider"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

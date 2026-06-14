@@ -16,17 +16,44 @@ app.post("/api/players", async (req, res) => {
 
   try {
     const supabase = getSupabase();
-    const { error } = await supabase
-      .from("players")
-      .upsert({
+    // Safe sequential upsert for players to support any schema (snake_case, camelCase, mixed)
+    let playerSuccess = false;
+    let playerError: any = null;
+    const playerPayloads = [
+      {
+        id,
+        nickname: currentNickname,
+        created_at: createdAt
+      },
+      {
+        id,
+        nickname: currentNickname,
+        createdAt: createdAt
+      },
+      {
         id,
         nickname: currentNickname,
         created_at: createdAt,
         createdAt: createdAt
-      }, { onConflict: "id" });
+      }
+    ];
 
-    if (error) {
-      console.error("Supabase upsert players error:", error);
+    for (const pPayload of playerPayloads) {
+      const { error: pErr } = await supabase
+        .from("players")
+        .upsert(pPayload, { onConflict: "id" });
+      
+      if (!pErr) {
+        playerSuccess = true;
+        break;
+      } else {
+        playerError = pErr;
+        console.warn("Player upsert alternative failed:", pErr.message);
+      }
+    }
+
+    if (!playerSuccess) {
+      console.error("Supabase upsert players error:", playerError);
       res.status(500).json({ success: false, error: "Database connection failed" });
       return;
     }

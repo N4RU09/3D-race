@@ -14,14 +14,83 @@ app.get(["/api/records/:trackId", "/:trackId"], async (req, res) => {
 
   try {
     const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from("race_records")
-      .select("*")
-      .or(`trackId.eq.${trackId},track_id.eq.${trackId}`)
-      .limit(200);
+    
+    // Dynamically retrieve records based on columns present in the active table schema
+    let data: any[] | null = null;
+    let queryError: any = null;
 
-    if (error) {
-      console.error("Supabase record fetch query failed:", error);
+    // 1. Try snake_case query (standard)
+    try {
+      const res = await supabase
+        .from("race_records")
+        .select("*")
+        .eq("track_id", trackId)
+        .limit(200);
+      if (!res.error) {
+        data = res.data;
+      } else {
+        queryError = res.error;
+      }
+    } catch (e) {
+      queryError = e;
+    }
+
+    // 2. Fallback to camelCase query
+    if (!data) {
+      try {
+        const res = await supabase
+          .from("race_records")
+          .select("*")
+          .eq("trackId", trackId)
+          .limit(200);
+        if (!res.error) {
+          data = res.data;
+        } else {
+          queryError = res.error;
+        }
+      } catch (e) {
+        queryError = e;
+      }
+    }
+
+    // 3. Fallback to lowercase query
+    if (!data) {
+      try {
+        const res = await supabase
+          .from("race_records")
+          .select("*")
+          .eq("trackid", trackId)
+          .limit(200);
+        if (!res.error) {
+          data = res.data;
+        } else {
+          queryError = res.error;
+        }
+      } catch (e) {
+        queryError = e;
+      }
+    }
+
+    // 4. Try ultimate fallback using .or if possible
+    if (!data) {
+      try {
+        const res = await supabase
+          .from("race_records")
+          .select("*")
+          .or(`trackId.eq.${trackId},track_id.eq.${trackId}`)
+          .limit(200);
+        if (!res.error) {
+          data = res.data;
+        } else {
+          queryError = res.error;
+        }
+      } catch (e) {
+        queryError = e;
+      }
+    }
+
+    if (!data) {
+      console.error("Supabase record fetch query failed:", queryError);
       res.status(500).json({ success: false, error: "Database connection failed" });
       return;
     }
@@ -78,24 +147,59 @@ app.post(["/api/records", "/"], async (req, res) => {
   try {
     const supabase = getSupabase();
 
-    // Ensure player profile is Upserted
+    // Ensure player profile is Upserted safely supporting both layout schemas
     try {
-      await supabase
-        .from("players")
-        .upsert({
-          id: playerId,
-          nickname: nickname,
-          created_at: createdAt,
-          createdAt: createdAt
-        }, { onConflict: "id" });
+      const playerPayloads = [
+        { id: playerId, nickname: nickname, created_at: createdAt },
+        { id: playerId, nickname: nickname, createdAt: createdAt },
+        { id: playerId, nickname: nickname, created_at: createdAt, createdAt: createdAt }
+      ];
+
+      for (const pPayload of playerPayloads) {
+        const { error: pErr } = await supabase
+          .from("players")
+          .upsert(pPayload, { onConflict: "id" });
+        if (!pErr) break;
+        console.warn("Attempted player upsert payload failed:", pErr.message);
+      }
     } catch (err) {
       console.warn("Soft conflict with players table:", err);
     }
 
-    // Save race record details
-    const { error } = await supabase
-      .from("race_records")
-      .insert({
+    // Save race record details via sequential try catch fallbacks for extreme schema compatibility
+    let insertSuccess = false;
+    let insertError: any = null;
+
+    const payloads = [
+      // 1. Pure snake_case (Postgres/Supabase recommended standard)
+      {
+        id: recordId,
+        player_id: playerId,
+        nickname: nickname,
+        track_id: trackId,
+        finish_time_ms: finishTimeMs,
+        created_at: createdAt
+      },
+      // 2. Pure camelCase
+      {
+        id: recordId,
+        playerId: playerId,
+        nickname: nickname,
+        trackId: trackId,
+        finishTimeMs: finishTimeMs,
+        createdAt: createdAt
+      },
+      // 3. Pure lowercase
+      {
+        id: recordId,
+        playerid: playerId,
+        nickname: nickname,
+        trackid: trackId,
+        finishtimems: finishTimeMs,
+        createdat: createdAt
+      },
+      // 4. Mixed (original insert)
+      {
         id: recordId,
         player_id: playerId,
         playerId: playerId,
@@ -106,10 +210,25 @@ app.post(["/api/records", "/"], async (req, res) => {
         finishTimeMs: finishTimeMs,
         created_at: createdAt,
         createdAt: createdAt
-      });
+      }
+    ];
 
-    if (error) {
-      console.error("Supabase record submission query failed:", error);
+    for (const payload of payloads) {
+      const { error: rErr } = await supabase
+        .from("race_records")
+        .insert(payload);
+      
+      if (!rErr) {
+        insertSuccess = true;
+        break;
+      } else {
+        insertError = rErr;
+        console.warn("Record insert alternative failed, trying next layout. Error:", rErr.message);
+      }
+    }
+
+    if (!insertSuccess) {
+      console.error("Supabase record submission query failed:", insertError);
       res.status(500).json({ success: false, error: "Database connection failed" });
       return;
     }

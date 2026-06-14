@@ -524,9 +524,12 @@ export function MainMenu({
                 </div>
 
                 {multiplayerAction === "create" ? (
-                  <p className="text-[11px] text-indigo-300 leading-relaxed font-sans">
-                    💡 Starting the grid will generate a unique 4-digit room code for your friends to enter.
-                  </p>
+                  <div className="bg-indigo-950/20 border border-indigo-900/30 p-3 rounded-xl space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-indigo-400 block">방 개설 가이드</span>
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                      💡 우측 하단의 <strong>방 개설하기</strong> 버튼을 누르면 고유 대기방 코드가 임의로 발급되며 대기방 로비가 먼저 개설됩니다. 친구들과 대기방에서 다 같이 만나 준비를 완료한 뒤 게임 플레이를 시작할 수 있습니다.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Room Code (4 Digits)</label>
@@ -541,6 +544,9 @@ export function MainMenu({
                       placeholder="e.g., 4018"
                       className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-center text-sm font-black tracking-widest text-indigo-400 outline-none"
                     />
+                    <p className="text-[10px] text-slate-500 leading-relaxed font-sans pl-1">
+                      💡 초대 받은 4자리 방 코드를 입력한 후 우측 하단의 <strong>방 참가하기</strong> 버튼을 눌러 대기방 로비에 입장하세요.
+                    </p>
                   </div>
                 )}
               </div>
@@ -782,7 +788,17 @@ export function MainMenu({
             <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-slate-400 text-xs flex items-center gap-2 font-sans font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
-                <span>Ready to start the race on <strong>{selectedTrack.name}</strong></span>
+                <span>
+                  {isMultiplayer ? (
+                    multiplayerAction === "create" ? (
+                      <><strong>{selectedTrack.name}</strong> 트랙 기반으로 새로운 멀티 대기방을 개설합니다.</>
+                    ) : (
+                      <>방 번호 <strong>{inputRoomCode || "____"}</strong> 대기방으로 참여합니다.</>
+                    )
+                  ) : (
+                    <>이동할 트랙: <strong>{selectedTrack.name}</strong> (싱글플레이어 전용 랩 타임 대결)</>
+                  )}
+                </span>
               </div>
               
               <button
@@ -804,14 +820,32 @@ export function MainMenu({
                     onStartGame(selectedTrackId, false);
                   }
                 }}
-                className={`w-full sm:w-auto flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-blue-600/10 hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group ${
+                className={`w-full sm:w-auto flex items-center justify-center gap-2.5 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer text-sm tracking-wider uppercase group ${
                   isMultiplayer && multiplayerAction === "join" && inputRoomCode.length < 4
-                    ? "opacity-50 cursor-not-allowed hover:scale-100"
-                    : ""
+                    ? "opacity-55 cursor-not-allowed hover:scale-100 bg-slate-800 text-slate-500"
+                    : isMultiplayer
+                    ? "bg-gradient-to-r from-indigo-650 via-indigo-700 to-indigo-800 hover:from-indigo-600 hover:to-indigo-700 shadow-indigo-600/10 hover:shadow-indigo-500/25"
+                    : "bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 shadow-blue-600/10 hover:shadow-blue-500/20"
                 }`}
               >
-                Assemble Grid
-                <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />
+                {isMultiplayer ? (
+                  multiplayerAction === "create" ? (
+                    <>
+                      방 개설하기 (Create Room)
+                      <Users className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    </>
+                  ) : (
+                    <>
+                      방 참가하기 (Join Room)
+                      <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />
+                    </>
+                  )
+                ) : (
+                  <>
+                    레이스 시작 (Start Race)
+                    <Play className="w-4 h-4 fill-white group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
               </button>
             </div>
 

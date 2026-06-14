@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/tracks", "destination": "/api/tracks.ts" },
+    { "source": "/api/db-status", "destination": "/api/db-status.ts" },
+    { "source": "/api/players", "destination": "/api/players.ts" },
+    { "source": "/api/records/:path*", "destination": "/api/records.ts" },
+    { "source": "/api/multiplayer/:path*", "destination": "/api/multiplayer.ts" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}

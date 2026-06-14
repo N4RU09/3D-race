@@ -19,6 +19,7 @@ interface MultiplayerState {
   roomCode?: string;
   isReady?: boolean;
   inLobby?: boolean;
+  progress?: number;
 }
 
 interface RoomState {
@@ -116,7 +117,7 @@ app.post(["/api/multiplayer/lobby-start", "/lobby-start"], (req, res) => {
 
 // 3. Coordination Synchronization in Active gameplay
 app.post(["/api/multiplayer/sync", "/sync"], (req, res) => {
-  const { id, nickname, trackId, color, x, y, z, heading, speed, wheelsAngle, isDrifting, roomCode } = req.body;
+  const { id, nickname, trackId, color, x, y, z, heading, speed, wheelsAngle, isDrifting, roomCode, progress } = req.body;
 
   if (!id || !trackId) {
     res.status(400).json({ error: "id and trackId are required." });
@@ -138,6 +139,7 @@ app.post(["/api/multiplayer/sync", "/sync"], (req, res) => {
     isDrifting: !!isDrifting,
     lastUpdated: Date.now(),
     roomCode: roomCode || "",
+    progress: typeof progress === "number" ? progress : 0,
   };
 
   // Clean up expired players (inactive for > 4 seconds)

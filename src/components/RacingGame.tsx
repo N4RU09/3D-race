@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { TrackConfig, TRACK_CONFIGS } from "../tracksData";
 import { CarControlState, CarPhysicsState, OpponentState } from "../types";
 import { GameHUD } from "./GameHUD";
+import { Minimap } from "./Minimap";
+import { RacePosition } from "./RacePosition";
 import { submitRaceRecord, syncMultiplayer } from "../api";
 import { formatTime } from "./MainMenu";
 import { Play, Trophy, RefreshCw, LogOut, ArrowRight, Zap, Award } from "lucide-react";
@@ -705,6 +707,10 @@ export function RacingGame({
       
       const st = statsRef.current;
       try {
+        const currentProgress = st.raceDone
+          ? totalLaps
+          : (st.currentLap - 1) + (st.lastNearestIndex / 1000);
+
         const peers = await syncMultiplayer({
           id: playerId,
           nickname,
@@ -718,6 +724,7 @@ export function RacingGame({
           wheelsAngle: st.wheelsAngle,
           isDrifting: st.isDrifting,
           roomCode: roomCode || "",
+          progress: currentProgress,
         });
 
         // Track and update peer ghost rendering states
@@ -1129,6 +1136,11 @@ export function RacingGame({
     };
   }, [trackId, carColor, isMultiplayer]);
 
+  const st = statsRef.current;
+  const playerProgress = st.raceDone
+    ? totalLaps
+    : (st.currentLap - 1) + (st.lastNearestIndex / 1000);
+
   return (
     <div className="absolute inset-0 w-full h-full bg-slate-950 overflow-hidden select-none">
       
@@ -1137,23 +1149,47 @@ export function RacingGame({
 
       {/* Embedded interactive head-up-display */}
       {gameResult === null && (
-        <GameHUD
-          trackName={trackConfig.name}
-          speed={speed}
-          elapsedTimeMs={elapsedTimeMs}
-          currentLap={currentLap}
-          totalLaps={totalLaps}
-          isDrifting={isDrifting}
-          driftCombo={driftCombo}
-          isMultiplayer={isMultiplayer}
-          opponents={opponents}
-          onRespawn={handleManualRespawn}
-          onExit={onExit}
-          countdown={countdown}
-          onTouchControl={handleTouchControl}
-          boosterCharge={boosterCharge}
-          isBoosting={isBoosting}
-        />
+        <>
+          <GameHUD
+            trackName={trackConfig.name}
+            speed={speed}
+            elapsedTimeMs={elapsedTimeMs}
+            currentLap={currentLap}
+            totalLaps={totalLaps}
+            isDrifting={isDrifting}
+            driftCombo={driftCombo}
+            isMultiplayer={isMultiplayer}
+            opponents={opponents}
+            onRespawn={handleManualRespawn}
+            onExit={onExit}
+            countdown={countdown}
+            onTouchControl={handleTouchControl}
+            boosterCharge={boosterCharge}
+            isBoosting={isBoosting}
+            roomCode={roomCode}
+          />
+
+          {/* Minimap positioned on the upper right below the timer/controls */}
+          <div className="absolute top-44 md:top-48 right-4 z-40 select-none">
+            <Minimap
+              trackConfig={trackConfig}
+              playerPos={{ x: st.x, z: st.z, heading: st.heading }}
+              opponents={opponents}
+            />
+          </div>
+
+          {/* Race Rankings/Position HUD positioned on upper left below active circuit card */}
+          <div className="absolute top-44 md:top-48 left-4 z-40 flex flex-col gap-3 select-none">
+            <RacePosition
+              playerId={playerId}
+              playerNickname={nickname}
+              playerColor={carColor}
+              playerProgress={playerProgress}
+              opponents={opponents}
+              isMultiplayer={isMultiplayer}
+            />
+          </div>
+        </>
       )}
 
       {/* Finished Stage results overlay card */}

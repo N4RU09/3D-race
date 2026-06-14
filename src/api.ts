@@ -61,6 +61,7 @@ export async function syncMultiplayer(state: {
   wheelsAngle: number;
   isDrifting: boolean;
   roomCode?: string;
+  progress?: number;
 }): Promise<OpponentState[]> {
   try {
     const res = await fetch(`${API_BASE}/api/multiplayer/sync`, {

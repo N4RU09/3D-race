@@ -54,4 +54,5 @@ export interface OpponentState {
   isDrifting: boolean;
   lastUpdated: number;
   roomCode?: string;
+  progress?: number;
 }

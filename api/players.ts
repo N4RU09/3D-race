@@ -54,8 +54,22 @@ app.post("/api/players", async (req, res) => {
 
     if (!playerSuccess) {
       console.error("Supabase upsert players error:", playerError);
-      res.status(500).json({ success: false, error: "Database connection failed" });
+      res.status(500).json({ success: false, error: playerError?.message || "Database connection failed" });
       return;
+    }
+
+    // Update race_records table's nickname column for matching logs
+    try {
+      const { error: updateErr } = await supabase
+        .from("race_records")
+        .update({ nickname: currentNickname })
+        .or(`player_id.eq.${id},playerId.eq.${id}`);
+      
+      if (updateErr) {
+        console.warn("Supabase update race_records nickname soft warning:", updateErr.message);
+      }
+    } catch (err: any) {
+      console.warn("Soft conflict updating race_records:", err?.message || err);
     }
 
     res.json({

@@ -91,23 +91,49 @@ app.get(["/api/records/:trackId", "/:trackId"], async (req, res) => {
 
     if (!data) {
       console.error("Supabase record fetch query failed:", queryError);
-      res.status(500).json({ success: false, error: "Database connection failed" });
+      res.status(500).json({ success: false, error: queryError?.message || "Database connection failed" });
       return;
+    }
+
+    // Fetch the latest nickname for each player from the players table as requested
+    const playerIds = Array.from(new Set(data.map((item: any) => item.playerId ?? item.player_id ?? item.playerid).filter(Boolean)));
+    const playerNicknames: Record<string, string> = {};
+
+    if (playerIds.length > 0) {
+      try {
+        const { data: playersData, error: playersError } = await supabase
+          .from("players")
+          .select("id, nickname")
+          .in("id", playerIds);
+        
+        if (!playersError && playersData) {
+          playersData.forEach((p: any) => {
+            playerNicknames[p.id] = p.nickname;
+          });
+        } else if (playersError) {
+          console.warn("Could not fetch players profiles for fresh nickname mapping:", playersError.message);
+        }
+      } catch (err: any) {
+        console.warn("Soft profile nickname query fail:", err?.message || err);
+      }
     }
 
     // Deduplicate: group by playerId and keep only the fastest compile time
     const uniqueBests: Record<string, any> = {};
 
     data?.forEach((item: any) => {
-      const pId = item.playerId ?? item.player_id ?? "unknown";
-      const fTime = Number(item.finishTimeMs ?? item.finish_time_ms ?? 9999999);
+      const pId = item.playerId ?? item.player_id ?? item.playerid ?? "unknown";
+      const fTime = Number(item.finishTimeMs ?? item.finish_time_ms ?? item.finishtimems ?? 9999999);
+      // Fallback to record-saved nickname if players table lookup is missing
+      const freshNickname = playerNicknames[pId] || item.nickname || "Anonymous Racer";
+
       const current = {
         id: item.id,
         playerId: pId,
-        nickname: item.nickname || "Anonymous Racer",
-        trackId: item.trackId ?? item.track_id,
+        nickname: freshNickname,
+        trackId: item.trackId ?? item.track_id ?? item.trackid,
         finishTimeMs: fTime,
-        createdAt: item.createdAt ?? item.created_at,
+        createdAt: item.createdAt ?? item.created_at ?? item.createdat,
       };
 
       if (!uniqueBests[pId] || fTime < uniqueBests[pId].finishTimeMs) {
@@ -128,7 +154,7 @@ app.get(["/api/records/:trackId", "/:trackId"], async (req, res) => {
     res.json(sortedLeaderboard);
   } catch (err: any) {
     console.error("Leaderboard retrieval failure:", err);
-    res.status(500).json({ success: false, error: "Database connection failed" });
+    res.status(500).json({ success: false, error: err?.message || "Database connection failed" });
   }
 });
 

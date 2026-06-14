@@ -12,6 +12,8 @@ interface MainMenuProps {
   setNickname: (val: string) => void;
   setCarColor: (val: string) => void;
   onStartGame: (trackId: string, isMultiplayer: boolean, roomCode?: string) => void;
+  selectedTrackId: string;
+  setSelectedTrackId: (id: string) => void;
 }
 
 export function formatTime(ms: number): string {
@@ -40,8 +42,9 @@ export function MainMenu({
   setNickname,
   setCarColor,
   onStartGame,
+  selectedTrackId,
+  setSelectedTrackId,
 }: MainMenuProps) {
-  const [selectedTrackId, setSelectedTrackId] = useState<string>("track-1");
   const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
   const [tempNickname, setTempNickname] = useState<string>(nickname);
   const [leaderboard, setLeaderboard] = useState<RaceRecord[]>([]);

@@ -57,10 +57,13 @@ export default function App() {
     localStorage.setItem("racer_player_nickname", name);
   };
 
+  const [selectedTrackId, setSelectedTrackId] = useState<string>("track-1");
+
   const handleStartGame = (trackId: string, multiplayerMode: boolean, roomCode?: string) => {
     setIsMultiplayer(multiplayerMode);
     setActiveRoomCode(roomCode || null);
     setActiveTrackId(trackId);
+    setSelectedTrackId(trackId);
   };
 
   const handleExitGame = () => {
@@ -96,6 +99,8 @@ export default function App() {
               setNickname={handleSetNickname}
               setCarColor={handleSetCarColor}
               onStartGame={handleStartGame}
+              selectedTrackId={selectedTrackId}
+              setSelectedTrackId={setSelectedTrackId}
             />
           </motion.div>
         ) : (

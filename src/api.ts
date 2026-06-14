@@ -24,11 +24,11 @@ export async function registerPlayer(id: string, nickname: string): Promise<Play
   return res.json();
 }
 
-export async function submitRaceRecord(playerId: string, trackId: string, finishTimeMs: number): Promise<{ success: boolean; record: RaceRecord }> {
+export async function submitRaceRecord(playerId: string, trackId: string, finishTimeMs: number, nickname: string): Promise<{ success: boolean; record: RaceRecord }> {
   const res = await fetch(`${API_BASE}/api/records`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ playerId, trackId, finishTimeMs }),
+    body: JSON.stringify({ playerId, trackId, finishTimeMs, nickname }),
   });
   if (!res.ok) throw new Error("Failed to submit race record");
   return res.json();

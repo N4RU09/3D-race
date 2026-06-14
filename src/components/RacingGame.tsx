@@ -991,7 +991,7 @@ export function RacingGame({
             // Submit record to Server Database
             const triggerSubmit = async () => {
               try {
-                const res = await submitRaceRecord(playerId, trackId, finalTime);
+                const res = await submitRaceRecord(playerId, trackId, finalTime, nickname);
                 setGameResult({
                   finishTimeMs: finalTime,
                   bestLapTimeMs: st.bestLapTimeMs,

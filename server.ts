@@ -196,18 +196,29 @@ GRANT ALL ON TABLE race_records TO service_role;`
           .from("race_records")
           .select("*")
           .or(`trackId.eq.${trackId},track_id.eq.${trackId}`)
-          .limit(100);
+          .limit(200); // Fetch a slightly higher limit to leave room for deduplication
 
         if (!error && data) {
-          const formattedRecords = data
-            .map((item: any) => ({
+          const uniqueBests: Record<string, any> = {};
+          
+          data.forEach((item: any) => {
+            const pId = item.playerId ?? item.player_id ?? "unknown";
+            const fTime = Number(item.finishTimeMs ?? item.finish_time_ms ?? 9999999);
+            const current = {
               id: item.id,
-              playerId: item.playerId ?? item.player_id,
-              nickname: item.nickname,
+              playerId: pId,
+              nickname: item.nickname || "Anonymous Racer",
               trackId: item.trackId ?? item.track_id,
-              finishTimeMs: Number(item.finishTimeMs ?? item.finish_time_ms),
+              finishTimeMs: fTime,
               createdAt: item.createdAt ?? item.created_at,
-            }))
+            };
+
+            if (!uniqueBests[pId] || fTime < uniqueBests[pId].finishTimeMs) {
+              uniqueBests[pId] = current;
+            }
+          });
+
+          const formattedRecords = Object.values(uniqueBests)
             .sort((a: any, b: any) => {
               if (a.finishTimeMs !== b.finishTimeMs) {
                 return a.finishTimeMs - b.finishTimeMs;
@@ -224,9 +235,17 @@ GRANT ALL ON TABLE race_records TO service_role;`
       }
     }
 
-    const records = raceRecords
+    // Deduplicate local in-memory records similarly
+    const uniqueBestsLocal: Record<string, RaceRecord> = {};
+    raceRecords
       .filter((r) => r.trackId === trackId)
-      // Sort: ascending finishNameMs (faster is better), then oldest createdAt first
+      .forEach((r) => {
+        if (!uniqueBestsLocal[r.playerId] || r.finishTimeMs < uniqueBestsLocal[r.playerId].finishTimeMs) {
+          uniqueBestsLocal[r.playerId] = r;
+        }
+      });
+
+    const records = Object.values(uniqueBestsLocal)
       .sort((a, b) => {
         if (a.finishTimeMs !== b.finishTimeMs) {
           return a.finishTimeMs - b.finishTimeMs;
@@ -280,14 +299,27 @@ GRANT ALL ON TABLE race_records TO service_role;`
 
   // 4. Save new race record
   app.post("/api/records", async (req, res) => {
-    const { playerId, trackId, finishTimeMs } = req.body;
+    const { playerId, trackId, finishTimeMs, nickname: reqNickname } = req.body;
     if (!playerId || !trackId || typeof finishTimeMs !== "number") {
       res.status(400).json({ error: "Invalid parameters." });
       return;
     }
 
+    let nickname = reqNickname ? String(reqNickname).trim().substring(0, 16) : null;
     const player = players[playerId];
-    const nickname = player ? player.nickname : "Anonymous Racer";
+    if (!nickname) {
+      nickname = player ? player.nickname : "Anonymous Racer";
+    }
+
+    // In-memory registration recovery if players dictionary got wiped
+    if (!player) {
+      players[playerId] = {
+        id: playerId,
+        nickname,
+        createdAt: new Date().toISOString(),
+      };
+      saveDB();
+    }
 
     const record: RaceRecord = {
       id: "rec-" + Math.random().toString(36).substr(2, 9),

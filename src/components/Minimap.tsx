@@ -83,11 +83,44 @@ export function Minimap({ trackConfig, playerPos, opponents }: MinimapProps) {
 
   // Convert THREE heading (in radians, where 0 is South/positive Z, increasing counterclockwise usually)
   // to SVG rotation degrees (where 0 is UP/North, increasing clockwise)
+  // Moving in positive Z means moving down on screen, and negative Z means moving up on screen.
+  // The correct transformation is 180 - (headingRad * 180) / Math.PI
   const getPlayerRotationDeg = (headingRad: number) => {
-    // 1 rad is ~57.29 deg. Rotate heading to point in correct vertical align.
-    const deg = (headingRad * 180) / Math.PI;
+    const deg = 180 - (headingRad * 180) / Math.PI;
     return deg;
   };
+
+  // Pre-calculate the starting/finish line segment coordinates perpendicular to the track spline
+  const finishLineGeom = useMemo(() => {
+    if (!points || points.length < 2) return null;
+    const p0 = points[0];
+    const pNext = points[1] || p0;
+    const pPrev = points[points.length - 1] || p0;
+
+    // Get tangent direction at start of track (points[0])
+    const dx = pNext.x - pPrev.x;
+    const dz = pNext.z - pPrev.z;
+    const len = Math.sqrt(dx * dx + dz * dz) || 1;
+    const tx = dx / len;
+    const tz = dz / len;
+
+    // Perpendicular vector to tangent: (-tz, tx)
+    const rx = -tz;
+    const rz = tx;
+
+    const roadHalfWidth = trackConfig.roadWidth / 2;
+
+    return {
+      x1: p0.x - rx * roadHalfWidth,
+      y1: p0.z - rz * roadHalfWidth,
+      x2: p0.x + rx * roadHalfWidth,
+      y2: p0.z + rz * roadHalfWidth,
+      cx: p0.x,
+      cy: p0.z,
+      rx,
+      rz,
+    };
+  }, [points, trackConfig.roadWidth]);
 
   return (
     <div className="relative w-44 h-44 md:w-52 md:h-52 bg-slate-950/80 backdrop-blur-md rounded-2xl border border-white/10 p-2.5 shadow-2xl flex flex-col items-center justify-center animate-fade-in">
@@ -141,6 +174,88 @@ export function Minimap({ trackConfig, playerPos, opponents }: MinimapProps) {
           strokeLinejoin="round"
           opacity="0.55"
         />
+
+        {/* Render Finish Line Checkered Strip */}
+        {finishLineGeom && (
+          <g>
+            {/* Dark backing overlay for clean occlusion of center lines */}
+            <line
+              x1={finishLineGeom.x1}
+              y1={finishLineGeom.y1}
+              x2={finishLineGeom.x2}
+              y2={finishLineGeom.y2}
+              stroke="#0f172a"
+              strokeWidth={bounds.width * 0.045}
+              strokeLinecap="butt"
+            />
+            {/* Glowing blue boundary support line */}
+            <line
+              x1={finishLineGeom.x1}
+              y1={finishLineGeom.y1}
+              x2={finishLineGeom.x2}
+              y2={finishLineGeom.y2}
+              stroke="#60a5fa"
+              strokeWidth={bounds.width * 0.035}
+              strokeLinecap="butt"
+            />
+            {/* White Checkers dash series */}
+            <line
+              x1={finishLineGeom.x1}
+              y1={finishLineGeom.y1}
+              x2={finishLineGeom.x2}
+              y2={finishLineGeom.y2}
+              stroke="#ffffff"
+              strokeWidth={bounds.width * 0.024}
+              strokeDasharray={`${bounds.width * 0.02} ${bounds.width * 0.02}`}
+              strokeLinecap="butt"
+            />
+            {/* Dark Checkers dash series with offset */}
+            <line
+              x1={finishLineGeom.x1}
+              y1={finishLineGeom.y1}
+              x2={finishLineGeom.x2}
+              y2={finishLineGeom.y2}
+              stroke="#1e293b"
+              strokeWidth={bounds.width * 0.024}
+              strokeDasharray={`${bounds.width * 0.02} ${bounds.width * 0.02}`}
+              strokeDashoffset={bounds.width * 0.02}
+              strokeLinecap="butt"
+            />
+            {/* Elegant Checkered Flag Pole & Icon beside the track */}
+            <g transform={`translate(${finishLineGeom.cx + finishLineGeom.rx * (trackConfig.roadWidth * 1.05)}, ${finishLineGeom.cy + finishLineGeom.rz * (trackConfig.roadWidth * 1.05)})`} className="drop-shadow-lg">
+              {/* Flagpole */}
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2={-bounds.width * 0.11}
+                stroke="#f1f5f9"
+                strokeWidth={bounds.width * 0.015}
+                strokeLinecap="round"
+              />
+              {/* Main Flag Body */}
+              <path
+                d={`M 0,${-bounds.width * 0.11} L ${bounds.width * 0.08},${-bounds.width * 0.09} L 0,${-bounds.width * 0.06} Z`}
+                fill="#ffffff"
+                stroke="#0f172a"
+                strokeWidth={bounds.width * 0.008}
+                strokeLinejoin="round"
+              />
+              {/* Inner Checkered dark cells */}
+              <path
+                d={`M 0,${-bounds.width * 0.11} L ${bounds.width * 0.04},${-bounds.width * 0.10} L ${bounds.width * 0.04},${-bounds.width * 0.075} L 0,${-bounds.width * 0.085} Z`}
+                fill="#0f172a"
+              />
+              {/* Flagpole top ball pin */}
+              <circle
+                cx="0"
+                cy={-bounds.width * 0.11}
+                r={bounds.width * 0.013}
+                fill="#ef4444"
+              />
+            </g>
+          </g>
+        )}
 
         {/* Render Opponent state locations */}
         {opponents.map((opp) => {

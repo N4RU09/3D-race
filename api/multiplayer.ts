@@ -30,8 +30,8 @@ interface RoomState {
 }
 
 // In-memory collections inside Vercel Function instances
-const roomsState: Record<string, RoomState> = {};
-const multiplayerLobby: Record<string, MultiplayerState> = {};
+const roomsState: Record<string, any> = {};
+const multiplayerLobby: Record<string, any> = {};
 
 // 1. Lobby Ping
 app.post(["/api/multiplayer/lobby-ping", "/lobby-ping"], (req, res) => {

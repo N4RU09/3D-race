@@ -1,5 +1,4 @@
 import express from "express";
-import "dotenv/config";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "./api/_supabase";
